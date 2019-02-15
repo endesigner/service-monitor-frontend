@@ -17,10 +17,11 @@ const SERVICE_API = "http://localhost:9090/service";
 class App extends React.Component<{}, State> {
   constructor(props) {
     super(props);
-    this.state = { services: null };
+    this.state = { services: [] };
     this.loadServices = this.loadServices.bind(this);
     this.onCheckChange = this.onCheckChange.bind(this);
     this.deleteChecked = this.deleteChecked.bind(this);
+    this.handleKeyPress = this.handleKeyPress.bind(this);
   }
 
   componentDidMount() {
@@ -32,6 +33,16 @@ class App extends React.Component<{}, State> {
       .then(res => res.json())
       .then(services => this.setState({ services: services }))
       .catch(e => console.log(e));
+  }
+
+  addService(url : string) {
+    fetch(SERVICE_API, {
+      method: 'POST',
+      body: JSON.stringify({ url: url })
+    })
+    .then(res => res.json())
+    .then(services => this.loadServices())
+    .catch(e => console.log(e));
   }
 
   onCheckChange(serviceId : number) {
@@ -63,6 +74,13 @@ class App extends React.Component<{}, State> {
     .catch(e => console.log(e));
   }
 
+  handleKeyPress(event) {
+    if (event.charCode != 13) return;
+
+    this.addService(event.target.value);
+    event.target.value = '';
+  }
+
   render() {
     let services = this.state.services;
 
@@ -70,6 +88,9 @@ class App extends React.Component<{}, State> {
       <div>
         <button onClick={this.loadServices}>Reload list</button>
         <ServiceList services={services} onCheckChange={this.onCheckChange} />
+        <div>
+          <input type="text" placeholder="Type URL & 'Enter' to add" onKeyPress={this.handleKeyPress} />
+        </div>
         <button onClick={this.deleteChecked}>Delete checked</button>
       </div>
     );
@@ -79,10 +100,30 @@ class App extends React.Component<{}, State> {
 function ServiceList({ services, onCheckChange }) {
   if (!services) return null;
 
+  const [editableIndex, updateEditableIndex] = React.useState(-1);
+
+  const clickHandler = (index) => (event) => {
+    event.preventDefault();
+    updateEditableIndex(index);
+  }
+
+  const createInput = (url) => {
+    return <input type="text" value={url} />;
+  };
+
+  const createLink = (url, index) => {
+    return <a href="#" onClick={clickHandler(index)}>{url}</a>;
+  };
+
+
   return services.map((service, index) => (
     <div key={index}>
-      <input type="checkbox" onChange={onCheckChange(index)} />
-      <span>{service.url}</span>
+      <input
+        type="checkbox"
+        onChange={onCheckChange(index)}
+        checked={service.checked ? true : false}
+      />
+      {editableIndex == index ? createInput(service.url) : createLink(service.url, index) }
       <span>{service.lastStatus}</span>
     </div>
   ));
