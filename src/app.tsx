@@ -1,10 +1,16 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import * as ReactDOMServer from 'react-dom/server';
+
+import { AppWrapper, Input } from './Components';
+
+import ServiceList from './ServiceList'
 
 type Service = {
-  url: string
+  uuid: string
+  , name: string
+  , url: string
   , lastStatus: string
+  , lastChecked: string
   , checked: boolean
 };
 
@@ -15,13 +21,18 @@ type State = {
 const SERVICE_API = "http://localhost:9090/service";
 
 class App extends React.Component<{}, State> {
+  private serviceName;
+  private serviceUrl;
+
   constructor(props) {
     super(props);
     this.state = { services: [] };
+
     this.loadServices = this.loadServices.bind(this);
     this.onCheckChange = this.onCheckChange.bind(this);
     this.deleteChecked = this.deleteChecked.bind(this);
     this.handleKeyPress = this.handleKeyPress.bind(this);
+    this.updateService = this.updateService.bind(this);
   }
 
   componentDidMount() {
@@ -35,10 +46,10 @@ class App extends React.Component<{}, State> {
       .catch(e => console.log(e));
   }
 
-  addService(url : string) {
+  addService(name: string, url : string) {
     fetch(SERVICE_API, {
       method: 'POST',
-      body: JSON.stringify({ url: url })
+      body: JSON.stringify({ name: name, url: url })
     })
     .then(res => res.json())
     .then(services => this.loadServices())
@@ -59,12 +70,25 @@ class App extends React.Component<{}, State> {
     }
   }
 
+  updateService({ name, url, uuid }) {
+    fetch(`${SERVICE_API}/${uuid}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: name, url: url })
+    })
+    .then(res => res.json())
+    .then(services => this.loadServices())
+    .catch(e => console.log(e));
+  }
+
   deleteChecked() {
     let servicesToDelete = this.state.services
-      .reduce((acc, service, index) =>
-        service.checked? acc.concat(index) : acc
+      .reduce((acc, service) =>
+        service.checked? acc.concat(service.uuid) : acc
       , []);
 
+    if (!servicesToDelete.length) return;
+
+    // TODO Error handling
     fetch(SERVICE_API, {
       method: 'DELETE',
       body: JSON.stringify(servicesToDelete)
@@ -75,58 +99,43 @@ class App extends React.Component<{}, State> {
   }
 
   handleKeyPress(event) {
-    if (event.charCode != 13) return;
+    if (event.key !== "Enter") return;
 
-    this.addService(event.target.value);
-    event.target.value = '';
+    this.addService(this.serviceName.value, this.serviceUrl.value);
+    this.serviceName.value = '';
+    this.serviceUrl.value = '';
   }
 
   render() {
     let services = this.state.services;
 
     return (
-      <div>
-        <button onClick={this.loadServices}>Reload list</button>
-        <ServiceList services={services} onCheckChange={this.onCheckChange} />
-        <div>
-          <input type="text" placeholder="Type URL & 'Enter' to add" onKeyPress={this.handleKeyPress} />
+      <AppWrapper>
+        <div className="controls">
+          <Input
+            type="text"
+            placeholder="Service name"
+            onKeyPress={this.handleKeyPress}
+            ref={(el) => { this.serviceName = el; }} />
+          <Input
+            type="text"
+            placeholder="Type URL & Enter"
+            onKeyPress={this.handleKeyPress}
+            ref={(el) => { this.serviceUrl = el; }} />
         </div>
-        <button onClick={this.deleteChecked}>Delete checked</button>
-      </div>
+
+        <ServiceList
+          services={services}
+          onCheckChange={this.onCheckChange}
+          onServiceUpdate={this.updateService} />
+
+        <div className="controls">
+          <button onClick={this.loadServices}>Reload list</button>
+          <button onClick={this.deleteChecked}>Delete checked</button>
+        </div>
+      </AppWrapper>
     );
   }
-}
-
-function ServiceList({ services, onCheckChange }) {
-  if (!services) return null;
-
-  const [editableIndex, updateEditableIndex] = React.useState(-1);
-
-  const clickHandler = (index) => (event) => {
-    event.preventDefault();
-    updateEditableIndex(index);
-  }
-
-  const createInput = (url) => {
-    return <input type="text" value={url} />;
-  };
-
-  const createLink = (url, index) => {
-    return <a href="#" onClick={clickHandler(index)}>{url}</a>;
-  };
-
-
-  return services.map((service, index) => (
-    <div key={index}>
-      <input
-        type="checkbox"
-        onChange={onCheckChange(index)}
-        checked={service.checked ? true : false}
-      />
-      {editableIndex == index ? createInput(service.url) : createLink(service.url, index) }
-      <span>{service.lastStatus}</span>
-    </div>
-  ));
 }
 
 ReactDOM.render(<App />, document.getElementById('root'));
